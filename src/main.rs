@@ -1,38 +1,52 @@
 use iced::{Element};
 use iced::widget;
-use iced::widget::{button};
+use iced::Subscription;
 use iced::advanced::image;
 
 fn main() -> iced::Result {
-    iced::run(update, view)
+    iced::application(
+        MandelbrotViewer::new, 
+        MandelbrotViewer::update, 
+        MandelbrotViewer::view).subscription(MandelbrotViewer::subscription).run()
 }
 
 #[derive(Default)]
-struct State {
+struct MandelbrotViewer {
 }
 
 #[derive(Debug, Clone)]
 enum Message {
 }
 
-fn update(state: &mut State, message: Message) {
-    match message {
+impl MandelbrotViewer {
+    fn new() -> Self {
+        MandelbrotViewer{}
     }
-}
 
-fn view(state: &State) -> Element<'_, Message>{
-    widget::image(mandelbrot_slow()).into()
+    fn subscription(&self) -> Subscription<Message> {
+        Subscription::none()
+    }
+
+    fn update(&mut self, message: Message) {
+        match message {
+        }
+    }
+
+    fn view(&self) -> Element<'_, Message>{
+        widget::image(mandelbrot_slow()).into()
+    }
 }
 
 fn mandelbrot_slow() -> image::Handle {
     let mut pixels: Vec<u8> = Vec::new();
-    for row in 0..255 {
-        for column in 0..255 {
-            pixels.push(column as u8); 
-            pixels.push(column as u8); 
-            pixels.push(column as u8); 
-            pixels.push(255); 
+    for row in 0..512 {
+        for column in 0..512 {
+            let brightness_value: u8 = (row as f32 * column as f32 / (512.0 * 512.0) * 255.0) as u8;
+            pixels.push(brightness_value); 
+            pixels.push(brightness_value); 
+            pixels.push(brightness_value); 
+            pixels.push(255);
         }
     }
-    image::Handle::from_rgba(255, 255, pixels)
+    image::Handle::from_rgba(512, 512, pixels)
 }
