@@ -1,5 +1,7 @@
 use iced::{Element};
+use iced::widget::{center, mouse_area};
 use iced::widget;
+use iced::mouse::ScrollDelta;
 use iced::{Point, Subscription, Size};
 use iced::advanced::image;
 use num::complex::Complex;
@@ -13,17 +15,26 @@ fn main() -> iced::Result {
         MandelbrotViewer::view).subscription(MandelbrotViewer::subscription).run()
 }
 
-#[derive(Default)]
 struct MandelbrotViewer {
+    image: image::Handle,
+    current_set_size: Size,
+    current_top_left: Point,
+    zoom_level: f32,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
+    Zoom(ScrollDelta),
 }
 
 impl MandelbrotViewer {
     fn new() -> Self {
-        MandelbrotViewer{}
+        Self {
+            current_set_size: Size::new(3.0, 2.0),
+            current_top_left: Point::new(-2.0, 1.0),
+            image: mandelbrot_image(Size::new(3.0, 2.0), Point::new(-2.0, 1.0)),
+            zoom_level: 1.00
+        }
     }
 
     fn subscription(&self) -> Subscription<Message> {
@@ -32,18 +43,29 @@ impl MandelbrotViewer {
 
     fn update(&mut self, message: Message) {
         match message {
+            Message::Zoom(scroll_delta) => { 
+                match scroll_delta {
+                    ScrollDelta::Lines{x, y} => {
+                        self.zoom_level += y / 10.0;
+                        if self.zoom_level < 1.0 {
+                            self.zoom_level = 1.0;
+                        }
+                    },
+                    ScrollDelta::Pixels{x, y} => {
+                        panic!("Don't support this yet");
+                    },
+                }
+            },
         }
     }
 
     fn view(&self) -> Element<'_, Message>{
-        widget::image(mandelbrot_slow()).into()
+        mouse_area(center(widget::image(self.image.clone()).scale(self.zoom_level))).on_scroll(Message::Zoom).into()
     }
 }
 
-fn mandelbrot_slow() -> image::Handle {
+fn mandelbrot_image(set_size: Size, top_left: Point) -> image::Handle {
     let image_size  = Size::new(1800, 1200);
-    let set_size = Size::new(3, 2);
-    let top_left = Point::new(-2, 1);
     let max_iterations = 1000;
     let x_scale: f64 = set_size.width as f64 / image_size.width as f64;
     let y_scale: f64 = set_size.height as f64 / image_size.height as f64;
@@ -69,15 +91,10 @@ fn mandelbrot_slow() -> image::Handle {
                 colour = 0;
             }
 
-            // println!("C: {c}");
-            // println!("Iterations: {iteration}");
-            // println!("Colour: {colour}");
-
             pixels.push(colour); 
             pixels.push(colour); 
             pixels.push(colour); 
             pixels.push(255);
-
         }
 
         return pixels;
