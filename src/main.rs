@@ -317,7 +317,6 @@ fn mandelbrot_image(region: &Rectangle<f64>) -> image::Handle {
         .map(|row| {
             let mut pixels: Vec<u8> = Vec::new();
             for column in 0..image_size.width {
-                let mut colour = 255;
                 let x_position: f64 = region.x as f64 + x_scale * column as f64;
                 let y_position: f64 = region.y as f64 - y_scale * row as f64;
                 let c = Complex::new(x_position, y_position);
@@ -329,10 +328,8 @@ fn mandelbrot_image(region: &Rectangle<f64>) -> image::Handle {
                     iteration += 1;
                 }
 
-                if iteration == max_iterations {
-                    colour = 0;
-                }
-
+                let stableness = iteration as f32 / max_iterations as f32;
+                let colour: u8 = ((1.0 - stableness) * 255.0) as u8;
                 pixels.push(colour);
                 pixels.push(colour);
                 pixels.push(colour);
