@@ -36,26 +36,28 @@ impl MandelbrotImage {
         };
         Self {
             current_region: starting_region,
-            image: mandelbrot_image(starting_region),
+            image: mandelbrot_image(&starting_region),
         }
     }
-}
 
-fn translate_image_space_to_set_space(
-    image_space: &Rectangle<f32>,
-    max_size: &Size<f32>,
-    current_set_space: &Rectangle<f64>,
-) -> Rectangle<f64> {
-    let relative_x_position = image_space.x as f64 / max_size.width as f64;
-    let relative_y_position = image_space.y as f64 / max_size.height as f64;
-    let relative_width = image_space.width as f64 / max_size.width as f64;
-    let relative_height = image_space.height as f64 / max_size.height as f64;
+    fn update_mandelbrot_image(
+        &mut self,
+        current_image_region: &Rectangle<f32>,
+        image_size: &Size,
+    ) {
+        let relative_x_position = current_image_region.x as f64 / image_size.width as f64;
+        let relative_y_position = current_image_region.y as f64 / image_size.height as f64;
+        let relative_width = current_image_region.width as f64 / image_size.width as f64;
+        let relative_height = current_image_region.height as f64 / image_size.height as f64;
 
-    Rectangle {
-        x: current_set_space.x + current_set_space.width * relative_x_position,
-        y: current_set_space.y - current_set_space.height * relative_y_position,
-        width: relative_width * current_set_space.width,
-        height: relative_height * current_set_space.height,
+        self.current_region.x =
+            self.current_region.x + self.current_region.width * relative_x_position;
+        self.current_region.y =
+            self.current_region.y - self.current_region.height * relative_y_position;
+        self.current_region.width = relative_width * self.current_region.width;
+        self.current_region.height = relative_height * self.current_region.height;
+
+        self.image = mandelbrot_image(&self.current_region);
     }
 }
 
@@ -252,13 +254,10 @@ impl MandelbrotViewer {
     fn update(&mut self, message: Message) {
         match message {
             Message::Regenerate => {
-                let new_set_space = translate_image_space_to_set_space(
+                self.mandelbrot_image.update_mandelbrot_image(
                     &self.image_viewer.image_region,
                     &self.image_viewer.max_size,
-                    &self.mandelbrot_image.current_region,
                 );
-                self.mandelbrot_image.image = mandelbrot_image(new_set_space);
-                self.mandelbrot_image.current_region = new_set_space;
                 self.image_viewer.reset_viewer_size();
             }
             Message::Zoom(scroll_delta) => match scroll_delta {
@@ -305,7 +304,7 @@ impl MandelbrotViewer {
     }
 }
 
-fn mandelbrot_image(region: Rectangle<f64>) -> image::Handle {
+fn mandelbrot_image(region: &Rectangle<f64>) -> image::Handle {
     let image_size = Size::new(1800, 1200);
     let max_iterations = 1000;
     let x_scale: f64 = region.width as f64 / image_size.width as f64;
