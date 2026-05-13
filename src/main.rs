@@ -89,7 +89,7 @@ impl PanningState {
         self.panning = false;
     }
 
-    fn pan_region(&mut self, region: &mut Rectangle<f32>, max_size: &Size<f32>) {
+    fn pan_region(&mut self, region: &mut Rectangle<f32>, max_size: &Size<f32>, zoom_ratio: f32) {
         let offset = self.pan_start - self.cursor_position;
         let new_left = region.x + offset.x;
         let new_right = region.x + region.width + offset.x;
@@ -97,11 +97,11 @@ impl PanningState {
         let new_bottom = region.y + region.height + offset.y;
 
         if new_left >= 0.0 && new_right <= max_size.width {
-            region.x += offset.x;
+            region.x += offset.x * zoom_ratio;
         }
 
         if new_top >= 0.0 && new_bottom <= max_size.height {
-            region.y += offset.y;
+            region.y += offset.y * zoom_ratio;
         }
 
         self.pan_start = self.cursor_position;
@@ -216,8 +216,9 @@ impl ImageViewer {
     }
 
     fn pan_region(&mut self) {
+        let zoom_ratio = self.image_region.width / self.max_size.width;
         self.panning_state
-            .pan_region(&mut self.image_region, &self.max_size);
+            .pan_region(&mut self.image_region, &self.max_size, zoom_ratio);
     }
 
     fn panning(&self) -> bool {
