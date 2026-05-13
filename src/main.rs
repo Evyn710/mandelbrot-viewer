@@ -42,12 +42,6 @@ impl MandelbrotImage {
     }
 }
 
-impl Default for MandelbrotImage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone)]
 enum Message {
     Regenerate,
@@ -104,6 +98,24 @@ fn zoom_out(region: &mut Rectangle<u32>, max_size: &Size<u32>) {
     }
 }
 
+fn translate_image_space_to_set_space(
+    image_space: &Rectangle<u32>,
+    max_size: &Size<u32>,
+    current_set_space: &Rectangle<f64>,
+) -> Rectangle<f64> {
+    let relative_x_position = image_space.x as f64 / max_size.width as f64;
+    let relative_y_position = image_space.y as f64 / max_size.height as f64;
+    let relative_width = image_space.width as f64 / max_size.width as f64;
+    let relative_height = image_space.height as f64 / max_size.height as f64;
+
+    Rectangle {
+        x: current_set_space.x + current_set_space.width * relative_x_position,
+        y: current_set_space.y - current_set_space.height * relative_y_position,
+        width: relative_width * current_set_space.width,
+        height: relative_height * current_set_space.height,
+    }
+}
+
 struct MandelbrotViewer {
     mandelbrot_image: MandelbrotImage,
     image_region: Rectangle<u32>,
@@ -133,7 +145,21 @@ impl MandelbrotViewer {
 
     fn update(&mut self, message: Message) {
         match message {
-            Message::Regenerate => {}
+            Message::Regenerate => {
+                let new_set_space = translate_image_space_to_set_space(
+                    &self.image_region,
+                    &self.max_size,
+                    &self.mandelbrot_image.current_region,
+                );
+                self.mandelbrot_image.image = mandelbrot_image(new_set_space);
+                self.mandelbrot_image.current_region = new_set_space;
+                self.image_region = Rectangle {
+                    x: 0,
+                    y: 0,
+                    width: self.max_size.width,
+                    height: self.max_size.height,
+                }
+            }
             Message::Zoom(scroll_delta) => match scroll_delta {
                 ScrollDelta::Lines { x: _x, y } => {
                     if y > 0.0 {
