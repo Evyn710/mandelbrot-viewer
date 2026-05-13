@@ -41,56 +41,6 @@ impl MandelbrotImage {
     }
 }
 
-fn zoom_in(region: &mut Rectangle<f32>) {
-    let width_to_remove = region.width * 0.10;
-    let height_to_remove = region.height * 0.10;
-    region.x += width_to_remove / 2.0;
-    region.y += height_to_remove / 2.0;
-    region.width -= width_to_remove;
-    region.height -= height_to_remove;
-}
-
-fn zoom_out(region: &mut Rectangle<f32>, max_size: &Size<f32>) {
-    let width_to_add = region.width * 0.10;
-    let height_to_add = region.height * 0.10;
-
-    let mut x_bounded = false;
-    let mut y_bounded = false;
-    let mut width_bounded = false;
-    let mut height_bounded = false;
-
-    if region.x > width_to_add / 2.0 {
-        region.x -= width_to_add / 2.0;
-    } else {
-        x_bounded = true;
-    }
-
-    if region.y > height_to_add / 2.0 {
-        region.y -= height_to_add / 2.0;
-    } else {
-        y_bounded = true;
-    }
-
-    if region.width + width_to_add < max_size.width {
-        region.width += width_to_add;
-    } else {
-        width_bounded = true;
-    }
-
-    if region.height + height_to_add < max_size.height {
-        region.height += height_to_add;
-    } else {
-        height_bounded = true;
-    }
-
-    if x_bounded && y_bounded && width_bounded && height_bounded {
-        region.x = 0.0;
-        region.y = 0.0;
-        region.width = max_size.width;
-        region.height = max_size.height;
-    }
-}
-
 fn translate_image_space_to_set_space(
     image_space: &Rectangle<f32>,
     max_size: &Size<f32>,
@@ -116,7 +66,7 @@ struct PanningState {
 }
 
 impl PanningState {
-    fn default() -> Self {
+    fn new() -> Self {
         Self {
             cursor_position: Point::default(),
             panning: false,
@@ -165,18 +115,16 @@ enum Message {
     StopPanning,
 }
 
-struct MandelbrotViewer {
-    mandelbrot_image: MandelbrotImage,
+struct ImageViewer {
     panning_state: PanningState,
     image_region: Rectangle<f32>,
     max_size: Size<f32>,
 }
 
-impl MandelbrotViewer {
+impl ImageViewer {
     fn new() -> Self {
         Self {
-            mandelbrot_image: MandelbrotImage::new(),
-            panning_state: PanningState::default(),
+            panning_state: PanningState::new(),
             image_region: Rectangle {
                 x: 0.0,
                 y: 0.0,
@@ -190,6 +138,113 @@ impl MandelbrotViewer {
         }
     }
 
+    fn reset_viewer_size(&mut self) {
+        self.image_region = Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width: self.max_size.width,
+            height: self.max_size.height,
+        }
+    }
+
+    fn zoom_in(&mut self) {
+        let region = &mut self.image_region;
+        let width_to_remove = region.width * 0.10;
+        let height_to_remove = region.height * 0.10;
+        region.x += width_to_remove / 2.0;
+        region.y += height_to_remove / 2.0;
+        region.width -= width_to_remove;
+        region.height -= height_to_remove;
+    }
+
+    fn zoom_out(&mut self) {
+        let region = &mut self.image_region;
+        let width_to_add = region.width * 0.10;
+        let height_to_add = region.height * 0.10;
+
+        let mut x_bounded = false;
+        let mut y_bounded = false;
+        let mut width_bounded = false;
+        let mut height_bounded = false;
+
+        if region.x > width_to_add / 2.0 {
+            region.x -= width_to_add / 2.0;
+        } else {
+            x_bounded = true;
+        }
+
+        if region.y > height_to_add / 2.0 {
+            region.y -= height_to_add / 2.0;
+        } else {
+            y_bounded = true;
+        }
+
+        if region.width + width_to_add < self.max_size.width {
+            region.width += width_to_add;
+        } else {
+            width_bounded = true;
+        }
+
+        if region.height + height_to_add < self.max_size.height {
+            region.height += height_to_add;
+        } else {
+            height_bounded = true;
+        }
+
+        if x_bounded && y_bounded && width_bounded && height_bounded {
+            region.x = 0.0;
+            region.y = 0.0;
+            region.width = self.max_size.width;
+            region.height = self.max_size.height;
+        }
+    }
+
+    // not sure about the duplication/fake encapsulation of the state here
+
+    fn update_cursor_position(&mut self, cursor_position: Point) {
+        self.panning_state.update_cursor_position(cursor_position);
+    }
+
+    fn start_panning(&mut self) {
+        self.panning_state.start_panning();
+    }
+
+    fn stop_panning(&mut self) {
+        self.panning_state.stop_panning();
+    }
+
+    fn pan_region(&mut self) {
+        self.panning_state
+            .pan_region(&mut self.image_region, &self.max_size);
+    }
+
+    fn panning(&self) -> bool {
+        self.panning_state.panning
+    }
+
+    fn image_region(&self) -> Rectangle<u32> {
+        Rectangle {
+            x: self.image_region.x as u32,
+            y: self.image_region.y as u32,
+            width: self.image_region.width as u32,
+            height: self.image_region.height as u32,
+        }
+    }
+}
+
+struct MandelbrotViewer {
+    mandelbrot_image: MandelbrotImage,
+    image_viewer: ImageViewer,
+}
+
+impl MandelbrotViewer {
+    fn new() -> Self {
+        Self {
+            mandelbrot_image: MandelbrotImage::new(),
+            image_viewer: ImageViewer::new(),
+        }
+    }
+
     fn subscription(&self) -> Subscription<Message> {
         Subscription::none()
     }
@@ -198,25 +253,20 @@ impl MandelbrotViewer {
         match message {
             Message::Regenerate => {
                 let new_set_space = translate_image_space_to_set_space(
-                    &self.image_region,
-                    &self.max_size,
+                    &self.image_viewer.image_region,
+                    &self.image_viewer.max_size,
                     &self.mandelbrot_image.current_region,
                 );
                 self.mandelbrot_image.image = mandelbrot_image(new_set_space);
                 self.mandelbrot_image.current_region = new_set_space;
-                self.image_region = Rectangle {
-                    x: 0.0,
-                    y: 0.0,
-                    width: self.max_size.width,
-                    height: self.max_size.height,
-                }
+                self.image_viewer.reset_viewer_size();
             }
             Message::Zoom(scroll_delta) => match scroll_delta {
                 ScrollDelta::Lines { x: _x, y } => {
                     if y > 0.0 {
-                        zoom_in(&mut self.image_region);
+                        self.image_viewer.zoom_in();
                     } else if y < 0.0 {
-                        zoom_out(&mut self.image_region, &self.max_size);
+                        self.image_viewer.zoom_out();
                     }
                 }
                 ScrollDelta::Pixels { x: _, y: _ } => {
@@ -224,17 +274,16 @@ impl MandelbrotViewer {
                 }
             },
             Message::CursorMoved(point) => {
-                self.panning_state.update_cursor_position(point);
-                if self.panning_state.panning {
-                    self.panning_state
-                        .pan_region(&mut self.image_region, &self.max_size);
+                self.image_viewer.update_cursor_position(point);
+                if self.image_viewer.panning() {
+                    self.image_viewer.pan_region();
                 }
             }
             Message::StartPanning => {
-                self.panning_state.start_panning();
+                self.image_viewer.start_panning();
             }
             Message::StopPanning => {
-                self.panning_state.stop_panning();
+                self.image_viewer.stop_panning();
             }
         }
     }
@@ -243,12 +292,7 @@ impl MandelbrotViewer {
         column![
             mouse_area(center(
                 widget::image(self.mandelbrot_image.image.clone())
-                    .crop(Rectangle {
-                        x: self.image_region.x as u32,
-                        y: self.image_region.y as u32,
-                        width: self.image_region.width as u32,
-                        height: self.image_region.height as u32,
-                    })
+                    .crop(self.image_viewer.image_region())
                     .expand(true)
             ))
             .on_scroll(Message::Zoom)
