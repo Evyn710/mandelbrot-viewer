@@ -1,11 +1,13 @@
 use iced::advanced::image;
 use iced::mouse::ScrollDelta;
 use iced::widget::{self, button};
-use iced::widget::{center, column, mouse_area};
-use iced::Element;
+use iced::widget::{center, column, mouse_area, row, text};
+use iced::{event, keyboard, Element, Event};
 use iced::{Point, Rectangle, Size, Subscription};
 use num::complex::Complex;
 use rayon::prelude::*;
+
+// TODO: add a way to go up a picture if you make a mistake using a list/stack of pictures
 
 fn main() -> iced::Result {
     iced::application(
@@ -110,11 +112,11 @@ impl PanningState {
 
 #[derive(Debug, Clone)]
 enum Message {
-    Regenerate,
     Zoom(ScrollDelta),
     CursorMoved(Point),
     StartPanning,
     StopPanning,
+    UiEvent(Event),
 }
 
 struct ImageViewer {
@@ -249,18 +251,11 @@ impl MandelbrotViewer {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        Subscription::none()
+        event::listen().map(Message::UiEvent)
     }
 
     fn update(&mut self, message: Message) {
         match message {
-            Message::Regenerate => {
-                self.mandelbrot_image.update_mandelbrot_image(
-                    &self.image_viewer.image_region,
-                    &self.image_viewer.max_size,
-                );
-                self.image_viewer.reset_viewer_size();
-            }
             Message::Zoom(scroll_delta) => match scroll_delta {
                 ScrollDelta::Lines { x: _x, y } => {
                     if y > 0.0 {
@@ -285,26 +280,46 @@ impl MandelbrotViewer {
             Message::StopPanning => {
                 self.image_viewer.stop_panning();
             }
+            Message::UiEvent(event) => {
+                if let Event::Keyboard(key_event) = event {
+                    if let keyboard::Event::KeyPressed {
+                        key,
+                        modified_key: _,
+                        physical_key: _,
+                        location: _,
+                        modifiers: _,
+                        text: _,
+                        repeat: _,
+                    } = key_event
+                    {
+                        if key == keyboard::Key::Character("r".into()) {
+                            self.mandelbrot_image.update_mandelbrot_image(
+                                &self.image_viewer.image_region,
+                                &self.image_viewer.max_size,
+                            );
+                            self.image_viewer.reset_viewer_size();
+                        }
+                    }
+                }
+            }
         }
     }
 
     fn view(&self) -> Element<'_, Message> {
-        column![
-            mouse_area(center(
-                widget::image(self.mandelbrot_image.image.clone())
-                    .crop(self.image_viewer.image_region())
-                    .expand(true)
-            ))
-            .on_scroll(Message::Zoom)
-            .on_move(Message::CursorMoved)
-            .on_press(Message::StartPanning)
-            .on_release(Message::StopPanning),
-            button("Regenerate Image").on_press(Message::Regenerate)
-        ]
+        column![mouse_area(center(
+            widget::image(self.mandelbrot_image.image.clone())
+                .crop(self.image_viewer.image_region())
+                .expand(true)
+        ))
+        .on_scroll(Message::Zoom)
+        .on_move(Message::CursorMoved)
+        .on_press(Message::StartPanning)
+        .on_release(Message::StopPanning),]
         .into()
     }
 }
 
+// shove this into a new helper file
 fn mandelbrot_image(region: &Rectangle<f64>) -> image::Handle {
     let image_size = Size::new(1800, 1200);
     let max_iterations = 1000;
