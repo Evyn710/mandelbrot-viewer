@@ -7,8 +7,6 @@ use iced::{Point, Rectangle, Size, Subscription};
 use num::complex::Complex;
 use rayon::prelude::*;
 
-// TODO: add a way to go up a picture if you make a mistake using a list/stack of pictures
-
 fn main() -> iced::Result {
     iced::application(
         MandelbrotViewer::new,
