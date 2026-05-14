@@ -1,7 +1,7 @@
 use iced::advanced::image;
 use iced::mouse::ScrollDelta;
 use iced::widget::{self, button};
-use iced::widget::{center, column, mouse_area, row, text};
+use iced::widget::{center, column, mouse_area, row};
 use iced::{event, keyboard, Element, Event};
 use iced::{Point, Rectangle, Size, Subscription};
 use num::complex::Complex;
@@ -19,6 +19,7 @@ fn main() -> iced::Result {
     .run()
 }
 
+#[derive(Clone)]
 struct MandelbrotImage {
     current_region: Rectangle<f64>,
     image: image::Handle,
@@ -110,19 +111,11 @@ impl PanningState {
     }
 }
 
-#[derive(Debug, Clone)]
-enum Message {
-    Zoom(ScrollDelta),
-    CursorMoved(Point),
-    StartPanning,
-    StopPanning,
-    UiEvent(Event),
-}
-
 struct ImageViewer {
     panning_state: PanningState,
     image_region: Rectangle<f32>,
     max_size: Size<f32>,
+    images: Vec<MandelbrotImage>,
 }
 
 impl ImageViewer {
@@ -139,7 +132,29 @@ impl ImageViewer {
                 width: 1800.0,
                 height: 1200.0,
             },
+            images: Vec::new(),
         }
+    }
+
+    fn add_previous_image(&mut self, previous_image: MandelbrotImage) {
+        self.images.push(previous_image);
+    }
+
+    fn previous_image(&mut self) -> Option<MandelbrotImage> {
+        self.images.pop()
+    }
+
+    fn reset_to_first_image(&mut self) -> Option<MandelbrotImage> {
+        if !self.images.is_empty() {
+            let first_image = self.images[0].clone();
+            self.images.clear();
+
+            return Some(first_image);
+        }
+
+        self.reset_viewer_size();
+
+        Option::None
     }
 
     fn reset_viewer_size(&mut self) {
@@ -237,6 +252,17 @@ impl ImageViewer {
     }
 }
 
+#[derive(Debug, Clone)]
+enum Message {
+    Zoom(ScrollDelta),
+    CursorMoved(Point),
+    StartPanning,
+    StopPanning,
+    UiEvent(Event),
+    GoBackImage,
+    Reset,
+}
+
 struct MandelbrotViewer {
     mandelbrot_image: MandelbrotImage,
     image_viewer: ImageViewer,
@@ -256,6 +282,17 @@ impl MandelbrotViewer {
 
     fn update(&mut self, message: Message) {
         match message {
+            Message::GoBackImage => {
+                if let Some(previous_image) = self.image_viewer.previous_image() {
+                    self.mandelbrot_image = previous_image;
+                    self.image_viewer.reset_viewer_size();
+                }
+            }
+            Message::Reset => {
+                if let Some(first_image) = self.image_viewer.reset_to_first_image() {
+                    self.mandelbrot_image = first_image;
+                }
+            }
             Message::Zoom(scroll_delta) => match scroll_delta {
                 ScrollDelta::Lines { x: _x, y } => {
                     if y > 0.0 {
@@ -293,6 +330,8 @@ impl MandelbrotViewer {
                     } = key_event
                     {
                         if key == keyboard::Key::Character("r".into()) {
+                            let old_image = self.mandelbrot_image.clone();
+                            self.image_viewer.add_previous_image(old_image);
                             self.mandelbrot_image.update_mandelbrot_image(
                                 &self.image_viewer.image_region,
                                 &self.image_viewer.max_size,
@@ -306,15 +345,22 @@ impl MandelbrotViewer {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        column![mouse_area(center(
-            widget::image(self.mandelbrot_image.image.clone())
-                .crop(self.image_viewer.image_region())
-                .expand(true)
-        ))
-        .on_scroll(Message::Zoom)
-        .on_move(Message::CursorMoved)
-        .on_press(Message::StartPanning)
-        .on_release(Message::StopPanning),]
+        column![
+            mouse_area(center(
+                widget::image(self.mandelbrot_image.image.clone())
+                    .crop(self.image_viewer.image_region())
+                    .expand(true),
+            ))
+            .on_scroll(Message::Zoom)
+            .on_move(Message::CursorMoved)
+            .on_press(Message::StartPanning)
+            .on_release(Message::StopPanning),
+            row![
+                button("<-").on_press(Message::GoBackImage),
+                button("Reset").on_press(Message::Reset)
+            ]
+            .spacing(5)
+        ]
         .into()
     }
 }
