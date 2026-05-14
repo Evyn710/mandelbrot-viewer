@@ -115,7 +115,8 @@ struct ImageViewer {
     panning_state: PanningState,
     image_region: Rectangle<f32>,
     max_size: Size<f32>,
-    images: Vec<MandelbrotImage>,
+    previous_images: Vec<MandelbrotImage>,
+    current_image: MandelbrotImage,
 }
 
 impl ImageViewer {
@@ -132,29 +133,36 @@ impl ImageViewer {
                 width: 1800.0,
                 height: 1200.0,
             },
-            images: Vec::new(),
+            previous_images: Vec::new(),
+            current_image: MandelbrotImage::new(),
         }
     }
 
     fn add_previous_image(&mut self, previous_image: MandelbrotImage) {
-        self.images.push(previous_image);
+        self.previous_images.push(previous_image);
     }
 
-    fn previous_image(&mut self) -> Option<MandelbrotImage> {
-        self.images.pop()
+    fn previous_image(&mut self) {
+        if let Some(previous_image) = self.previous_images.pop() {
+            self.current_image = previous_image;
+            self.reset_viewer_size();
+        }
     }
 
-    fn reset_to_first_image(&mut self) -> Option<MandelbrotImage> {
-        if !self.images.is_empty() {
-            let first_image = self.images[0].clone();
-            self.images.clear();
-
-            return Some(first_image);
+    fn reset_to_first_image(&mut self) {
+        if !self.previous_images.is_empty() {
+            self.current_image = self.previous_images[0].clone();
+            self.previous_images.clear();
         }
 
         self.reset_viewer_size();
+    }
 
-        Option::None
+    fn generate_image(&mut self) {
+        self.add_previous_image(self.current_image.clone());
+        self.current_image
+            .update_mandelbrot_image(&self.image_region, &self.max_size);
+        self.reset_viewer_size();
     }
 
     fn reset_viewer_size(&mut self) {
@@ -218,8 +226,6 @@ impl ImageViewer {
         }
     }
 
-    // not sure about the duplication/fake encapsulation of the state here
-
     fn update_cursor_position(&mut self, cursor_position: Point) {
         self.panning_state.update_cursor_position(cursor_position);
     }
@@ -250,6 +256,10 @@ impl ImageViewer {
             height: self.image_region.height as u32,
         }
     }
+
+    fn current_image_handle(&self) -> image::Handle {
+        self.current_image.image.clone()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -264,14 +274,12 @@ enum Message {
 }
 
 struct MandelbrotViewer {
-    mandelbrot_image: MandelbrotImage,
     image_viewer: ImageViewer,
 }
 
 impl MandelbrotViewer {
     fn new() -> Self {
         Self {
-            mandelbrot_image: MandelbrotImage::new(),
             image_viewer: ImageViewer::new(),
         }
     }
@@ -283,15 +291,10 @@ impl MandelbrotViewer {
     fn update(&mut self, message: Message) {
         match message {
             Message::GoBackImage => {
-                if let Some(previous_image) = self.image_viewer.previous_image() {
-                    self.mandelbrot_image = previous_image;
-                    self.image_viewer.reset_viewer_size();
-                }
+                self.image_viewer.previous_image();
             }
             Message::Reset => {
-                if let Some(first_image) = self.image_viewer.reset_to_first_image() {
-                    self.mandelbrot_image = first_image;
-                }
+                self.image_viewer.reset_to_first_image();
             }
             Message::Zoom(scroll_delta) => match scroll_delta {
                 ScrollDelta::Lines { x: _x, y } => {
@@ -330,13 +333,7 @@ impl MandelbrotViewer {
                     } = key_event
                     {
                         if key == keyboard::Key::Character("r".into()) {
-                            let old_image = self.mandelbrot_image.clone();
-                            self.image_viewer.add_previous_image(old_image);
-                            self.mandelbrot_image.update_mandelbrot_image(
-                                &self.image_viewer.image_region,
-                                &self.image_viewer.max_size,
-                            );
-                            self.image_viewer.reset_viewer_size();
+                            self.image_viewer.generate_image();
                         }
                     }
                 }
@@ -347,7 +344,7 @@ impl MandelbrotViewer {
     fn view(&self) -> Element<'_, Message> {
         column![
             mouse_area(center(
-                widget::image(self.mandelbrot_image.image.clone())
+                widget::image(self.image_viewer.current_image_handle())
                     .crop(self.image_viewer.image_region())
                     .expand(true),
             ))
